@@ -1,0 +1,25 @@
+# Web Framework
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+
+# LangGraph
+langgraph==0.6.4
+langchain-core==0.3.74
+langchain-openai==0.3.28
+
+# OpenAI
+openai==1.99.9
+
+# Configuration
+python-dotenv==1.1.1
+
+# Data Validation
+pydantic==2.11.7
+
+# Typing
+typing-extensions==4.15.0
+
+# HTTP Client (used by LangChain/OpenAI)
+httpx==0.28.1
+
+langchain-openai==0.3.28
