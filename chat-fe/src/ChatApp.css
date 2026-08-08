@@ -198,6 +198,7 @@
   border-radius: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+  text-align: left;
 }
 
 .message--human .message-content {

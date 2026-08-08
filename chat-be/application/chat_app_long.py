@@ -9,10 +9,12 @@ from langgraph.store.base import BaseStore
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
+from fastapi import Request
+import asyncio
 import uuid
 
 load_dotenv()
-llm = ChatOpenAI(model="gpt-4o-mini")
+llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
 
 
 # =========================
@@ -27,8 +29,9 @@ class MessagesState(TypedDict):
 # NODE
 # =========================
 
-def ask_llm(state: MessagesState, config: RunnableConfig, *, store: BaseStore) -> MessagesState:
+async def ask_llm(state: MessagesState, config: RunnableConfig, *, store: BaseStore) -> MessagesState:
     user_id = config["configurable"]["user_id"]
+    thread_id = config["configurable"]["thread_id"]
     namespace = (user_id, "memories")
 
     # 1. Pull everything we know about this user
@@ -41,10 +44,13 @@ def ask_llm(state: MessagesState, config: RunnableConfig, *, store: BaseStore) -
 
     # 2. Answer
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
-    response = llm.invoke(messages)
+    response = await llm.ainvoke(messages)
 
-    # 3. Save the user's message as a memory (simple: remember everything they say)
+    # 3. Save the user's message as a memory
     store.put(namespace, str(uuid.uuid4()), {"text": state["messages"][-1].content})
+
+    # 4. Register this thread as belonging to this user (dedup by using thread_id as the key)
+    store.put((user_id, "threads"), thread_id, {"thread_id": thread_id})
 
     return {"messages": [response]}
 
@@ -78,13 +84,8 @@ def send_message(user_id: str, thread_id: str, user_text: str) -> str:
 
 
 def get_all_thread_ids(user_id: str) -> list[str]:
-    seen: dict[str, str] = {}
-    for ckpt in memory.list(None):
-        thread_id = ckpt.config["configurable"]["thread_id"][user_id]
-        ts = ckpt.checkpoint.get("ts", "")
-        if thread_id not in seen:
-            seen[thread_id] = ts
-    return sorted(seen, key=lambda t: seen[t], reverse=False)
+    items = store.search((user_id, "threads"))
+    return [item.value["thread_id"] for item in items]
 
 
 def get_conversation(thread_id: str) -> list[dict]:
@@ -98,3 +99,32 @@ def get_conversation(thread_id: str) -> list[dict]:
 def get_user_memories(user_id: str) -> list[str]:
     """See everything stored long-term for a user."""
     return [m.value["text"] for m in store.search((user_id, "memories"))]
+
+    
+
+async def stream_message(user_id: str, thread_id: str, user_text: str, request: Request):
+    config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+
+    astream = app.astream_events(
+        {"messages": [HumanMessage(content=user_text)]},
+        config=config,
+        version="v2",
+    )
+
+    try:
+        async for event in astream:
+            if await request.is_disconnected():
+                # actually close the underlying generator, not just stop yielding
+                await astream.aclose()
+                break
+
+            kind = event["event"]
+
+            if kind == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                if chunk.content:
+                    yield {"type": "token", "content": chunk.content}
+
+    except asyncio.CancelledError:
+        await astream.aclose()
+        raise

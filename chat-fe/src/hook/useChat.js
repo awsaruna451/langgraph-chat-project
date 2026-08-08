@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { sendMessage, getConversation, getConversations } from "../api/chatApi";
+import { streamMessage, getConversation, getConversations } from "../api/chatApi";
 
 const USER_ID_KEY = "chat_user_id";
-
+const THREAD_ID_KEY = "chat_thread_id";
 
 function getOrCreateUserId() {
   let id = localStorage.getItem(USER_ID_KEY);
@@ -13,31 +13,28 @@ function getOrCreateUserId() {
   }
   return id;
 }
-/**
- * Core chat state and actions.
- *
- * @returns {{
- *   threadId: string,
- *   threads: string[],
- *   messages: Array<{ role: string, content: string }>,
- *   loading: boolean,
- *   error: string | null,
- *   newChat: () => void,
- *   loadChat: (id: string) => Promise<void>,
- *   send: (text: string) => Promise<void>,
- *   clearError: () => void,
- * }}
- */
+
+function getOrCreateThreadId() {
+  let id = localStorage.getItem(THREAD_ID_KEY);
+  if (!id) {
+    id = uuidv4();
+    localStorage.setItem(THREAD_ID_KEY, id);
+  }
+  return id;
+}
+
 export function useChat() {
   const [userId] = useState(getOrCreateUserId);
-  const [threadId, setThreadId] = useState(() => uuidv4());
+  const [threadId, setThreadId] = useState(getOrCreateThreadId);
   const [threads, setThreads] = useState([]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const abortRef = useRef(null);
 
   useEffect(() => {
     loadThreads();
+    restoreConversation(threadId); // ← load the last active thread's messages
   }, []);
 
   async function loadThreads() {
@@ -49,20 +46,36 @@ export function useChat() {
     }
   }
 
+  async function restoreConversation(id) {
+    try {
+      const history = await getConversation(id, userId);
+      setMessages(history ?? []);
+    } catch (err) {
+      // thread might not exist yet (e.g. brand new user) — safe to ignore
+      console.warn("No existing conversation for thread:", id);
+    }
+  }
+
   function addThread(id) {
     setThreads((prev) => (prev.includes(id) ? prev : [...prev, id]));
   }
 
   const newChat = useCallback(() => {
-    setThreadId(uuidv4());
+    abortRef.current?.abort();
+    const id = uuidv4();
+    localStorage.setItem(THREAD_ID_KEY, id);
+    setThreadId(id);
     setMessages([]);
     setError(null);
+    setLoading(false);
   }, []);
 
   const loadChat = useCallback(async (id) => {
+    abortRef.current?.abort();
     setError(null);
     try {
       const history = await getConversation(id, userId);
+      localStorage.setItem(THREAD_ID_KEY, id);
       setThreadId(id);
       setMessages(history);
     } catch (err) {
@@ -77,25 +90,65 @@ export function useChat() {
 
       const userMsg = { role: "human", content: trimmed };
       setMessages((prev) => [...prev, userMsg]);
+
+      const aiMsgIndex = { current: null };
+      setMessages((prev) => {
+        aiMsgIndex.current = prev.length;
+        return [...prev, { role: "ai", content: "" }];
+      });
+
       setLoading(true);
       setError(null);
       addThread(threadId);
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
-        const res = await sendMessage(threadId, trimmed, userId);
-        setMessages((prev) => [
-          ...prev,
-          { role: "ai", content: res.response },
-        ]);
+        await streamMessage(
+          threadId,
+          trimmed,
+          userId,
+          {
+            onToken: (content) => {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const idx = aiMsgIndex.current;
+                updated[idx] = {
+                  ...updated[idx],
+                  content: updated[idx].content + content,
+                };
+                return updated;
+              });
+            },
+
+            onDone: () => {
+              setLoading(false);
+       
+            },
+            onError: (message) => {
+              setError(message || "Something went wrong while streaming.");
+              setLoading(false);
+            },
+          },
+          controller.signal
+        );
       } catch (err) {
-        setError("Failed to send message. Please try again.");
-        setMessages((prev) => prev.slice(0, -1));
+        if (err.name !== "AbortError") {
+          setError("Failed to send message. Please try again.");
+          setMessages((prev) => prev.slice(0, -2));
+        }
       } finally {
         setLoading(false);
       }
     },
-    [threadId, loading]
+    [threadId, userId, loading]
   );
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    setLoading(false);
+  }, []);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -108,6 +161,7 @@ export function useChat() {
     newChat,
     loadChat,
     send,
+    stop,
     clearError,
   };
 }
