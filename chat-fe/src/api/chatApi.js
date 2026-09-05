@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://localhost:8001";
 
 export async function sendMessage(threadId, message, userId) {
   const res = await fetch(`${BASE_URL}/chat`, {

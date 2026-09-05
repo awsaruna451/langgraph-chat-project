@@ -18,8 +18,8 @@ app.add_middleware(
 
 
 @app.post("/chat")
-def chat(req: ChatRequest):
-    response = service.send_message(req.user_id, req.thread_id, req.message)
+async def chat(req: ChatRequest):
+    response = await service.send_message(req.user_id, req.thread_id, req.message)
     return {"response": response}
 
 
@@ -50,10 +50,10 @@ async def chat_stream(req: ChatRequest, request: Request):
 
 
 @app.get("/conversation/{thread_id}")
-def conversation(thread_id: str):
+async def conversation(thread_id: str):
     return service.get_conversation(thread_id)
 
 
 @app.get("/conversations")
-def conversations(user_id: str):
+async def conversations(user_id: str):
     return service.get_all_thread_ids(user_id)

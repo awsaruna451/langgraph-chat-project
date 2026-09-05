@@ -30,6 +30,7 @@ export function useChat() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTool, setActiveTool] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export function useChat() {
     setThreadId(id);
     setMessages([]);
     setError(null);
+    setActiveTool(null);
     setLoading(false);
   }, []);
 
@@ -121,14 +123,16 @@ export function useChat() {
                 return updated;
               });
             },
-
+            onToolStart: (tool) => setActiveTool(tool),
+            onToolEnd: () => setActiveTool(null),
             onDone: () => {
               setLoading(false);
-       
+              setActiveTool(null);
             },
             onError: (message) => {
               setError(message || "Something went wrong while streaming.");
               setLoading(false);
+              setActiveTool(null);
             },
           },
           controller.signal
@@ -148,6 +152,7 @@ export function useChat() {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     setLoading(false);
+    setActiveTool(null);
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -158,6 +163,7 @@ export function useChat() {
     messages,
     loading,
     error,
+    activeTool,
     newChat,
     loadChat,
     send,
