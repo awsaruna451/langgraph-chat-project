@@ -1,4 +1,5 @@
-name: Reusable - Build & Push toECR
+name: Reusable - Build & Push to ECR
+
 on:
   workflow_call:
     inputs:
@@ -18,20 +19,25 @@ on:
         description: "Name of the ECR repository for this service"
         required: true
         type: string
-        default: "ai-agent-platform-prod"
+        default: "ai-agent-platform-dev"
       aws_region:
         description: "AWS region the ECR repository lives in"
         required: false
         type: string
         default: "us-east-1"
       environment:
-        description: "Environment tag to target for deployment (e.g. prod)"
+        description: "Environment tag to target for deployment (e.g. dev)"
         required: true
         type: string
       container_port:
         description: "Port the container listens on internally"
         required: true
         type: string
+      secret_name:
+        description: "Secrets Manager secret name to inject as container env vars (optional — leave blank if the service needs none)"
+        required: false
+        type: string
+        default: ""
     secrets:
       AWS_ROLE_ARN:
         description: "IAM role ARN GitHub Actions will assume via OIDC"
@@ -114,19 +120,42 @@ jobs:
 
           REGISTRY="${{ steps.ecr-login.outputs.registry }}"
           IMAGE="${REGISTRY}/${{ inputs.ecr_repository }}:${{ steps.tags.outputs.sha_tag }}"
+          SECRET_NAME="${{ inputs.secret_name }}"
+
+          cat > deploy.sh <<'SCRIPT_EOF'
+          #!/bin/bash
+          set -euxo pipefail
+          aws ecr get-login-password --region "__AWS_REGION__" | docker login --username AWS --password-stdin "__REGISTRY__"
+          docker pull "__IMAGE__"
+          docker stop __SERVICE_NAME__ || true
+          docker rm __SERVICE_NAME__ || true
+
+          ENV_FLAGS=""
+          if [ -n "__SECRET_NAME__" ]; then
+            SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "__SECRET_NAME__" --region "__AWS_REGION__" --query SecretString --output text)
+            ENV_FLAGS=$(echo "$SECRET_JSON" | jq -r 'to_entries | map("-e " + .key + "=" + (.value|@sh)) | join(" ")')
+          fi
+
+          eval docker run -d --name __SERVICE_NAME__ --restart unless-stopped -p __CONTAINER_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
+          SCRIPT_EOF
+
+          sed -i \
+            -e "s#__AWS_REGION__#${{ inputs.aws_region }}#g" \
+            -e "s#__REGISTRY__#${REGISTRY}#g" \
+            -e "s#__IMAGE__#${IMAGE}#g" \
+            -e "s#__SERVICE_NAME__#${{ inputs.service_name }}#g" \
+            -e "s#__CONTAINER_PORT__#${{ inputs.container_port }}#g" \
+            -e "s#__SECRET_NAME__#${SECRET_NAME}#g" \
+            deploy.sh
+
+          B64=$(base64 -w0 deploy.sh)
 
           COMMAND_ID=$(aws ssm send-command \
             --region "${{ inputs.aws_region }}" \
             --document-name "AWS-RunShellScript" \
             --targets "Key=InstanceIds,Values=$(echo $INSTANCE_IDS | tr ' ' ',')" \
             --comment "Deploy ${{ inputs.service_name }}" \
-            --parameters commands="[
-              \"aws ecr get-login-password --region ${{ inputs.aws_region }} | docker login --username AWS --password-stdin ${REGISTRY}\",
-              \"docker pull ${IMAGE}\",
-              \"docker stop ${{ inputs.service_name }} || true\",
-              \"docker rm ${{ inputs.service_name }} || true\",
-              \"docker run -d --name ${{ inputs.service_name }} --restart unless-stopped -p ${{ inputs.container_port }}:${{ inputs.container_port }} ${IMAGE}\"
-            ]" \
+            --parameters commands="[\"echo ${B64} | base64 -d > /tmp/deploy.sh\", \"chmod +x /tmp/deploy.sh\", \"/tmp/deploy.sh\"]" \
             --query "Command.CommandId" --output text)
 
           echo "Waiting for command $COMMAND_ID to finish..."

@@ -23,6 +23,7 @@ jobs:
       ecr_repository: "mcp-server"
       aws_region: "us-east-1"
       environment: "dev"     # ← confirm this matches var.environment in main.tf
-      container_port: "8000"  # ← PLACEHOLDER: replace with mcp-cal-server's actual listening port
+      container_port: "8080"  # ← PLACEHOLDER: replace with mcp-cal-server's actual listening port
+      secret_name: "ai-agent-platform-prod-secrets"  # ← confirm this matches your actual secret name; omit this line if mcp-cal-server needs no secrets
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

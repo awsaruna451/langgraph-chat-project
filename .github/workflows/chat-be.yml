@@ -23,6 +23,7 @@ jobs:
       ecr_repository: "ai-agent"
       aws_region: "us-east-1"
       environment: "dev"     # ← confirm this matches var.environment in main.tf
-      container_port: "8001"  # ← PLACEHOLDER: replace with chat-be's actual listening port
+      container_port: "8000"  # ← PLACEHOLDER: replace with chat-be's actual listening port
+      secret_name: "ai-agent-platform-prod-secrets"  # ← confirm this matches your actual secret name
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
