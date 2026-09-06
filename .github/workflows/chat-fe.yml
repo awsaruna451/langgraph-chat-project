@@ -22,5 +22,7 @@ jobs:
       dockerfile: "chat-fe/Dockerfile"
       ecr_repository: "frontend"
       aws_region: "us-east-1"
+      environment: "dev"     # ← confirm this matches var.environment in main.tf
+      container_port: "5173"  # ← PLACEHOLDER: replace with chat-fe's actual listening port
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

@@ -25,6 +25,14 @@ on:
         required: false
         type: string
         default: "us-east-1"
+      environment:
+        description: "Environment tag to target for deployment (e.g. prod)"
+        required: true
+        type: string
+      container_port:
+        description: "Port the container listens on internally"
+        required: true
+        type: string
     secrets:
       AWS_ROLE_ARN:
         description: "IAM role ARN GitHub Actions will assume via OIDC"
@@ -41,12 +49,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Debug OIDC token
-        run: |
-          curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | \
-            jq -R 'split(".") | .[1] | @base64d | fromjson'
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -98,3 +100,48 @@ jobs:
           echo "### ${{ inputs.service_name }} pushed to ECR" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${{ steps.tags.outputs.image_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${{ steps.tags.outputs.image_latest }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy via SSM
+        run: |
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --region "${{ inputs.aws_region }}" \
+            --filters "Name=tag:Environment,Values=${{ inputs.environment }}" \
+                      "Name=tag:ManagedBy,Values=terraform" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+
+          if [ -z "$INSTANCE_IDS" ]; then
+            echo "No running instances found to deploy to."
+            exit 1
+          fi
+
+          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          IMAGE="${REGISTRY}/${{ inputs.ecr_repository }}:${{ steps.tags.outputs.sha_tag }}"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region "${{ inputs.aws_region }}" \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=InstanceIds,Values=$(echo $INSTANCE_IDS | tr ' ' ',')" \
+            --comment "Deploy ${{ inputs.service_name }}" \
+            --parameters commands="[
+              \"aws ecr get-login-password --region ${{ inputs.aws_region }} | docker login --username AWS --password-stdin ${REGISTRY}\",
+              \"docker pull ${IMAGE}\",
+              \"docker stop ${{ inputs.service_name }} || true\",
+              \"docker rm ${{ inputs.service_name }} || true\",
+              \"docker run -d --name ${{ inputs.service_name }} --restart unless-stopped -p ${{ inputs.container_port }}:${{ inputs.container_port }} ${IMAGE}\"
+            ]" \
+            --query "Command.CommandId" --output text)
+
+          echo "Waiting for command $COMMAND_ID to finish..."
+          aws ssm wait command-executed \
+            --region "${{ inputs.aws_region }}" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$(echo $INSTANCE_IDS | cut -d' ' -f1)" || true
+
+          for id in $INSTANCE_IDS; do
+            echo "--- Output for $id ---"
+            aws ssm get-command-invocation \
+              --region "${{ inputs.aws_region }}" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$id"
+          done

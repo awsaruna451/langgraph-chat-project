@@ -22,5 +22,7 @@ jobs:
       dockerfile: "mcp-cal-server/Dockerfile"
       ecr_repository: "mcp-server"
       aws_region: "us-east-1"
+      environment: "dev"     # ← confirm this matches var.environment in main.tf
+      container_port: "8000"  # ← PLACEHOLDER: replace with mcp-cal-server's actual listening port
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
