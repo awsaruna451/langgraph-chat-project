@@ -91,7 +91,6 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ steps.tags.outputs.image_sha }}
-            ${{ steps.tags.outputs.image_latest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -99,7 +98,6 @@ jobs:
         run: |
           echo "### ${{ inputs.service_name }} pushed to ECR" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${{ steps.tags.outputs.image_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`${{ steps.tags.outputs.image_latest }}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy via SSM
         run: |
