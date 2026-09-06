@@ -1,0 +1,17 @@
+.env
+.env.*
+.git
+.gitignore
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info
+.venv
+venv/
+*.ipynb
+*.ipynb_checkpoints
+application/*copy*
+Dockerfile
+.dockerignore
+README.md

@@ -1,0 +1,22 @@
+name: mcp-cal-server - Build & Deploy
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "mcp-cal-server/**"
+      - ".github/workflows/mcp-cal-server.yml"
+      - ".github/workflows/_build-push-ecr.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-and-push:
+    uses: ./.github/workflows/_build-push-ecr.yml
+    with:
+      service_name: "mcp-cal-server"
+      context_path: "mcp-cal-server"
+      dockerfile: "mcp-cal-server/Dockerfile"
+      ecr_repository: "mcp-cal-server"
+      aws_region: "us-east-1"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

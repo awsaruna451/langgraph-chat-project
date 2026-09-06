@@ -17,6 +17,11 @@ app.add_middleware(
 )
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
     response = await service.send_message(req.user_id, req.thread_id, req.message)

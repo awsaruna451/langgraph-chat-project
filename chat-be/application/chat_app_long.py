@@ -22,15 +22,7 @@ load_dotenv()
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
-MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/mcp")
-STDIO_SERVER_PYTHON = os.getenv(
-    "STDIO_SERVER_PYTHON",
-    "/Users/arunakumara/git/stdio-mcp-server/venv/bin/python3",  # <-- update this
-)
-STDIO_SERVER_PATH = os.getenv(
-    "STDIO_SERVER_PATH",
-    "/Users/arunakumara/git/stdio-mcp-server/server.py",  # <-- update this
-)
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-cal-server:8000/mcp")
 
 
 # =========================
@@ -136,15 +128,10 @@ llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
 # =========================
 
 mcp_servers = {
-    "math-server": {
+    "cal-server": {
         "url": MCP_SERVER_URL,
         "transport": "streamable_http",
-    },
-    "stdio-mcp-server": {
-        "command": STDIO_SERVER_PYTHON,
-        "args": [STDIO_SERVER_PATH],
-        "transport": "stdio",
-    },
+    }
 }
 
 mcp_client = MultiServerMCPClient(mcp_servers)

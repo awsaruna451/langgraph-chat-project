@@ -1,0 +1,22 @@
+name: chat-fe - Build & Deploy
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "chat-fe/**"
+      - ".github/workflows/chat-fe.yml"
+      - ".github/workflows/_build-push-ecr.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-and-push:
+    uses: ./.github/workflows/_build-push-ecr.yml
+    with:
+      service_name: "chat-fe"
+      context_path: "chat-fe"
+      dockerfile: "chat-fe/Dockerfile"
+      ecr_repository: "chat-fe"
+      aws_region: "us-east-1"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

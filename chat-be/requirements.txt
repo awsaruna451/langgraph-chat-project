@@ -6,6 +6,8 @@ uvicorn[standard]==0.35.0
 langgraph==0.6.4
 langchain-core==0.3.74
 langchain-openai==0.3.28
+langchain-mcp-adapters==0.1.9
+mcp==1.9.4
 
 # OpenAI
 openai==1.99.9
@@ -19,7 +21,11 @@ pydantic==2.11.7
 # Typing
 typing-extensions==4.15.0
 
-# HTTP Client (used by LangChain/OpenAI)
+# HTTP Clients
 httpx==0.28.1
+requests>=2.31.0
 
-langchain-openai==0.3.28
+# Pinned to avoid the aws-lc-rs backend (cryptography>=42) which has known
+# SIGILL crashes on Apple Silicon under Docker Desktop's virtualized ARM.
+# Pulled in transitively via mcp -> langchain-mcp-adapters.
+cryptography<42
