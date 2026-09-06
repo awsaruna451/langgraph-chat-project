@@ -1,5 +1,4 @@
 name: Reusable - Build & Push toECR
-
 on:
   workflow_call:
     inputs:
