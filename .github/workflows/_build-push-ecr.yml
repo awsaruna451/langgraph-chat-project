@@ -19,6 +19,7 @@ on:
         description: "Name of the ECR repository for this service"
         required: true
         type: string
+        default: "ai-agent-platform-prod"
       aws_region:
         description: "AWS region the ECR repository lives in"
         required: false

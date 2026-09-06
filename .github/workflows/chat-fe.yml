@@ -20,7 +20,7 @@ jobs:
       service_name: "chat-fe"
       context_path: "chat-fe"
       dockerfile: "chat-fe/Dockerfile"
-      ecr_repository: "chat-fe"
+      ecr_repository: "frontend"
       aws_region: "us-east-1"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

@@ -20,7 +20,7 @@ jobs:
       service_name: "mcp-cal-server"
       context_path: "mcp-cal-server"
       dockerfile: "mcp-cal-server/Dockerfile"
-      ecr_repository: "mcp-cal-server"
+      ecr_repository: "mcp-server"
       aws_region: "us-east-1"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
