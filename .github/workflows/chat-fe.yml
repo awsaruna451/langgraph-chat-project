@@ -9,6 +9,10 @@ on:
       - ".github/workflows/_build-push-ecr.yml"
   workflow_dispatch: {}
 
+permissions:
+  id-token: write   # required so the caller can grant this to the reusable workflow
+  contents: read
+
 jobs:
   build-and-push:
     uses: ./.github/workflows/_build-push-ecr.yml
