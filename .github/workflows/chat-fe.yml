@@ -23,6 +23,7 @@ jobs:
       ecr_repository: "frontend"
       aws_region: "us-east-1"
       environment: "dev"
-      container_port: "5173"
+      host_port: "5173"
+      container_port: "80"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

@@ -1,4 +1,5 @@
-name: Reusable - Build & Push to ECR dep
+name: Reusable - Build & Push to ECR
+
 on:
   workflow_call:
     inputs:
@@ -18,18 +19,22 @@ on:
         description: "Name of the ECR repository for this service"
         required: true
         type: string
-        default: "ai-agent-platform-dev"
+        default: "ai-agent-platform-prod"
       aws_region:
         description: "AWS region the ECR repository lives in"
         required: false
         type: string
         default: "us-east-1"
       environment:
-        description: "Environment tag to target for deployment (e.g. dev)"
+        description: "Environment tag to target for deployment (e.g. prod)"
+        required: true
+        type: string
+      host_port:
+        description: "Port on the EC2 host to publish (what the ALB target group forwards to)"
         required: true
         type: string
       container_port:
-        description: "Port the container listens on internally"
+        description: "Port the process inside the container actually listens on (e.g. nginx = 80)"
         required: true
         type: string
       secret_name:
@@ -131,11 +136,14 @@ jobs:
 
           ENV_FLAGS=""
           if [ -n "__SECRET_NAME__" ]; then
+            set +x
             SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "__SECRET_NAME__" --region "__AWS_REGION__" --query SecretString --output text)
             ENV_FLAGS=$(echo "$SECRET_JSON" | jq -r 'to_entries | map("-e " + .key + "=" + (.value|@sh)) | join(" ")')
+            unset SECRET_JSON
+            set -x
           fi
 
-          eval docker run -d --name __SERVICE_NAME__ --restart unless-stopped -p __CONTAINER_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
+          eval docker run -d --name __SERVICE_NAME__ --restart unless-stopped -p __HOST_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
           SCRIPT_EOF
 
           sed -i \
@@ -143,6 +151,7 @@ jobs:
             -e "s#__REGISTRY__#${REGISTRY}#g" \
             -e "s#__IMAGE__#${IMAGE}#g" \
             -e "s#__SERVICE_NAME__#${{ inputs.service_name }}#g" \
+            -e "s#__HOST_PORT__#${{ inputs.host_port }}#g" \
             -e "s#__CONTAINER_PORT__#${{ inputs.container_port }}#g" \
             -e "s#__SECRET_NAME__#${SECRET_NAME}#g" \
             deploy.sh

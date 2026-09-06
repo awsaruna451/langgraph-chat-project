@@ -23,7 +23,8 @@ jobs:
       ecr_repository: "mcp-server"
       aws_region: "us-east-1"
       environment: "dev"
-      container_port: "8000"  # ← PLACEHOLDER: replace with mcp-cal-server's actual listening port
+      host_port: "8000"
+      container_port: "8000"  # ← confirm mcp-cal-server's actual internal listening port
       secret_name: "ai-agent-platform-dev-secrets"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

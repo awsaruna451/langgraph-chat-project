@@ -23,7 +23,8 @@ jobs:
       ecr_repository: "ai-agent"
       aws_region: "us-east-1"
       environment: "dev"
-      container_port: "8001"  # ← PLACEHOLDER: replace with chat-be's actual listening port
+      host_port: "8001"
+      container_port: "8000"  # ← confirm chat-be's actual internal listening port (uvicorn/fastapi default shown here)
       secret_name: "ai-agent-platform-dev-secrets"
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
