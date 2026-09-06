@@ -1,0 +1,80 @@
+Metadata-Version: 2.4
+Name: mcp-math-server
+Version: 1.0.0
+Summary: Production MCP server exposing basic math tools
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastmcp>=2.14.2
+Requires-Dist: pydantic-settings>=2.5.0
+Requires-Dist: python-json-logger>=2.0.7
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24.0; extra == "dev"
+Requires-Dist: httpx>=0.27.0; extra == "dev"
+
+# mcp-math-server
+
+A production-grade MCP server exposing basic math tools (`add`, `subtract`, `multiply`, `divide`) over HTTP.
+
+## What changed from the example version
+
+| Area | Before | After |
+|---|---|---|
+| Logging | `print()` statements | Structured JSON logs (`app/logging_config.py`) — ready for CloudWatch/Datadog/etc. |
+| Config | Hardcoded `host`, `port`, CORS `"*"` | Environment-driven via `pydantic-settings` (`app/config.py`), no hardcoded values |
+| CORS | Wide open (`allow_origins=["*"]`, credentials allowed) | Configurable allow-list, no wildcard-with-credentials |
+| Auth | None | Optional bearer-token auth (`MCP_AUTH_TOKEN`), off by default for local dev |
+| Error handling | Unhandled `ZeroDivisionError` would crash the call with a raw traceback | Raises `ToolError` with a clean, client-safe message |
+| Health checks | None | `GET /health` for load balancer / orchestrator probes |
+| Typo | `substract` | `subtract` (note: this is a breaking rename for existing clients — see below) |
+| Tests | None | `pytest` suite covering all four tools + the divide-by-zero error path |
+| Packaging | Bare `main.py`, no image | Multi-stage `Dockerfile`, non-root user, pinned deps, healthcheck |
+
+## Project structure
+
+```
+.
+├── app/
+│   ├── main.py            # entrypoint: server setup, health route, CORS, auth
+│   ├── config.py           # environment-driven settings
+│   ├── logging_config.py    # structured JSON logging
+│   └── tools/
+│       └── math_tools.py     # tool implementations
+├── tests/
+│   └── test_math_tools.py
+├── Dockerfile
+├── .dockerignore
+├── .env.example
+└── pyproject.toml
+```
+
+## Running locally
+
+```bash
+cp .env.example .env    # adjust as needed
+pip install -e ".[dev]"
+python -m app.main
+```
+
+## Running tests
+
+```bash
+pytest
+```
+
+## Docker
+
+```bash
+docker build -t mcp-math-server .
+docker run -p 8000:8000 --env-file .env mcp-math-server
+```
+
+## Breaking change to flag
+
+The original tool `substract` (typo) is renamed to `subtract`. If any existing client already calls the old name, this breaks it. If you need a transition period, keep both registered — `substract` as a thin deprecated alias — until clients migrate.
+
+## Still worth adding before a real production rollout
+
+- **Rate limiting** — nothing currently throttles tool calls per client.
+- **Metrics** — no Prometheus/OpenTelemetry instrumentation yet; the `/health` route only covers liveness, not deeper readiness checks.
+- **Secrets management** — `MCP_AUTH_TOKEN` is read from an env var; for real deployments pull it from Secrets Manager / Vault at boot instead of a plain env var baked into the container's environment.

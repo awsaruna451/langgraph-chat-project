@@ -1,0 +1,25 @@
+[project]
+name = "mcp-cal-server"
+version = "1.0.0"
+description = "Production MCP server exposing basic math tools"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.14.2",
+    "pydantic-settings>=2.5.0",
+    "python-json-logger>=2.0.7",
+    "cryptography>=41.0.0,<42",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+mcp-cal-server = "app.main:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
