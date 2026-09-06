@@ -1,4 +1,4 @@
-name: Reusable - Build & Push to ECR
+name: Reusable - Build & Push toECR
 
 on:
   workflow_call:
