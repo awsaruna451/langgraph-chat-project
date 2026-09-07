@@ -134,6 +134,11 @@ jobs:
           docker stop __SERVICE_NAME__ || true
           docker rm __SERVICE_NAME__ || true
 
+          # Shared user-defined network so containers can reach each other by
+          # name (e.g. http://mcp-cal-server:8000) — the default bridge
+          # network does not support container-name DNS resolution.
+          docker network create app-net 2>/dev/null || true
+
           ENV_FLAGS=""
           if [ -n "__SECRET_NAME__" ]; then
             set +x
@@ -143,7 +148,7 @@ jobs:
             set -x
           fi
 
-          eval docker run -d --name __SERVICE_NAME__ --restart unless-stopped -p __HOST_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
+          eval docker run -d --name __SERVICE_NAME__ --network app-net --restart unless-stopped -p __HOST_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
           SCRIPT_EOF
 
           sed -i \

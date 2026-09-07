@@ -22,7 +22,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/chat")
+@app.post("/api/chat")
 async def chat(req: ChatRequest):
     response = await service.send_message(req.user_id, req.thread_id, req.message)
     return {"response": response}
@@ -41,7 +41,7 @@ async def sse_event_generator(request: Request, chat_req: ChatRequest):
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
 
-@app.post("/chat/stream")
+@app.post("/api/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request):
     return StreamingResponse(
         sse_event_generator(request, req),
@@ -54,11 +54,11 @@ async def chat_stream(req: ChatRequest, request: Request):
     )
 
 
-@app.get("/conversation/{thread_id}")
+@app.get("/api/conversation/{thread_id}")
 async def conversation(thread_id: str):
     return service.get_conversation(thread_id)
 
 
-@app.get("/conversations")
+@app.get("/api/conversations")
 async def conversations(user_id: str):
     return service.get_all_thread_ids(user_id)

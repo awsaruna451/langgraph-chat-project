@@ -13,7 +13,7 @@ COPY . .
 
 # Baked into the JS bundle at build time (Vite requirement for static SPAs).
 # Override at build time: --build-arg VITE_API_URL=https://api.yourdomain.com
-ARG VITE_API_URL=http://localhost:8001
+ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
