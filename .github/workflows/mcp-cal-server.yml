@@ -1,5 +1,4 @@
 name: mcp-cal-server - Build & Deployment
-
 on:
   push:
     branches: [dev]
