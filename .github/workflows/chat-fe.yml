@@ -1,5 +1,4 @@
 name: chat-fe - Build & Deploy
-
 on:
   push:
     branches: [dev]
