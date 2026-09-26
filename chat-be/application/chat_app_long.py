@@ -1,6 +1,8 @@
 import os
+import time
 import uuid
 import asyncio
+import logging
 import requests
 
 from langgraph.graph import StateGraph, END
@@ -20,14 +22,18 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
-MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-cal-server:8000/mcp")
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8000/mcp")
 
 
 # =========================
 # LOCAL TOOLS
 # =========================
+# NOTE: never log `str(e)` / tracebacks of requests exceptions here. They contain
+# the full request URL, which includes the API key in the query string.
 
 @tool
 def get_weather(city: str) -> str:
@@ -37,6 +43,7 @@ def get_weather(city: str) -> str:
         city: The city name, e.g. "Negombo" or "London,UK".
     """
     if not OPENWEATHER_API_KEY:
+        logger.error("weather tool not configured: missing OPENWEATHER_API_KEY")
         return "Weather tool is not configured: missing OPENWEATHER_API_KEY."
 
     url = "https://api.openweathermap.org/data/2.5/weather"
@@ -52,10 +59,13 @@ def get_weather(city: str) -> str:
         data = resp.json()
     except requests.exceptions.HTTPError:
         if resp.status_code == 404:
+            logger.info("weather city not found")
             return f"Could not find weather for '{city}'. Check the city name."
+        logger.warning("weather api error status=%s", resp.status_code)
         return f"Weather API error: {resp.status_code} - {resp.text}"
     except requests.exceptions.RequestException as e:
-        return f"Failed to reach weather service: {e}"
+        logger.warning("weather request failed error_type=%s", type(e).__name__)
+        return "Failed to reach weather service. Please try again later."
 
     desc = data["weather"][0]["description"]
     temp = data["main"]["temp"]
@@ -78,6 +88,7 @@ def get_stock_quote(symbol: str) -> str:
         symbol: The stock ticker symbol, e.g. "AAPL", "MSFT", "IBM".
     """
     if not ALPHAVANTAGE_API_KEY:
+        logger.error("stock tool not configured: missing ALPHAVANTAGE_API_KEY")
         return "Stock quote tool is not configured: missing ALPHAVANTAGE_API_KEY."
 
     url = "https://www.alphavantage.co/query"
@@ -92,16 +103,20 @@ def get_stock_quote(symbol: str) -> str:
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.RequestException as e:
-        return f"Failed to reach Alpha Vantage: {e}"
+        logger.warning("stock request failed error_type=%s", type(e).__name__)
+        return "Failed to reach Alpha Vantage. Please try again later."
 
     # Alpha Vantage returns 200 OK even for errors/rate limits, so check the payload.
     if "Note" in data:
+        logger.warning("alpha vantage rate limit reached")
         return "Alpha Vantage rate limit reached. Please try again in a moment."
     if "Information" in data:
+        logger.warning("alpha vantage returned an information/error payload")
         return f"Alpha Vantage error: {data['Information']}"
 
     quote = data.get("Global Quote", {})
     if not quote or not quote.get("01. symbol"):
+        logger.info("stock symbol not found symbol=%s", symbol)
         return f"Could not find a quote for '{symbol}'. Check the ticker symbol."
 
     price = quote.get("05. price")
@@ -145,11 +160,14 @@ async def load_mcp_tools() -> list:
     """
     try:
         mcp_tools = await mcp_client.get_tools()
-        print(f"[MCP] Loaded {len(mcp_tools)} tool(s): "
-              f"{[t.name for t in mcp_tools]}")
+        logger.info(
+            "MCP tools loaded count=%d names=%s",
+            len(mcp_tools),
+            [t.name for t in mcp_tools],
+        )
         return mcp_tools
-    except Exception as e:
-        print(f"[MCP] Failed to load MCP tools: {e}")
+    except Exception:
+        logger.exception("MCP tools load failed, continuing without MCP tools")
         return []
 
 
@@ -179,6 +197,7 @@ def make_ask_llm(llm_with_tools):
 
         # 1. Pull everything we know about this user
         memories = store.search(namespace)
+        logger.debug("memories loaded thread_id=%s count=%d", thread_id, len(memories))
         facts = "\n".join(f"- {m.value['text']}" for m in memories)
 
         system_prompt = (
@@ -198,13 +217,22 @@ def make_ask_llm(llm_with_tools):
 
         # 2. Answer (may include tool calls)
         messages = [SystemMessage(content=system_prompt)] + state["messages"]
+        started = time.perf_counter()
         response = await llm_with_tools.ainvoke(messages)
+        logger.info(
+            "llm call completed thread_id=%s duration_ms=%d tool_calls=%s usage=%s",
+            thread_id,
+            (time.perf_counter() - started) * 1000,
+            [tc["name"] for tc in response.tool_calls],
+            getattr(response, "usage_metadata", None),
+        )
 
         # 3. Save the user's message as a memory (only plain human turns,
         #    not the re-entry after a tool call/response round-trip)
         last_msg = state["messages"][-1]
         if isinstance(last_msg, HumanMessage):
             store.put(namespace, str(uuid.uuid4()), {"text": last_msg.content})
+            logger.debug("memory saved thread_id=%s", thread_id)
 
         # 4. Register this thread as belonging to this user
         store.put((user_id, "threads"), thread_id, {"thread_id": thread_id})
@@ -239,7 +267,13 @@ async def get_app():
         if "app" in _app_cache:
             return _app_cache["app"]
 
+        logger.info("building graph")
         mcp_tools = await load_mcp_tools()
+        if not mcp_tools:
+            logger.warning(
+                "graph built without MCP tools and cached; "
+                "MCP tools will stay unavailable until the process restarts"
+            )
         tools = LOCAL_TOOLS + mcp_tools
 
         llm_with_tools = llm.bind_tools(tools)
@@ -254,6 +288,7 @@ async def get_app():
 
         compiled = graph.compile(checkpointer=memory, store=store)
         _app_cache["app"] = compiled
+        logger.info("graph ready tools=%d", len(tools))
         return compiled
 
 
@@ -263,10 +298,16 @@ async def get_app():
 
 async def send_message(user_id: str, thread_id: str, user_text: str) -> str:
     """Send a message and return the AI reply."""
+    started = time.perf_counter()
     app = await get_app()
     result = await app.ainvoke(
         {"messages": [HumanMessage(content=user_text)]},
         config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
+    )
+    logger.info(
+        "graph invoke completed thread_id=%s duration_ms=%d",
+        thread_id,
+        (time.perf_counter() - started) * 1000,
     )
     return result["messages"][-1].content
 
@@ -278,6 +319,7 @@ def send_message_sync(user_id: str, thread_id: str, user_text: str) -> str:
 
 def get_all_thread_ids(user_id: str) -> list[str]:
     items = store.search((user_id, "threads"))
+    logger.info("threads loaded user_id=%s count=%d", user_id, len(items))
     return [item.value["thread_id"] for item in items]
 
 
@@ -285,13 +327,17 @@ def get_conversation(thread_id: str) -> list[dict]:
     config = {"configurable": {"thread_id": thread_id}}
     for ckpt in memory.list(config):
         msgs = ckpt.checkpoint.get("channel_values", {}).get("messages", [])
+        logger.info("conversation loaded thread_id=%s messages=%d", thread_id, len(msgs))
         return [{"role": m.type, "content": m.content} for m in msgs]
+    logger.info("conversation not found thread_id=%s", thread_id)
     return []
 
 
 def get_user_memories(user_id: str) -> list[str]:
     """See everything stored long-term for a user."""
-    return [m.value["text"] for m in store.search((user_id, "memories"))]
+    memories = store.search((user_id, "memories"))
+    logger.debug("memories loaded user_id=%s count=%d", user_id, len(memories))
+    return [m.value["text"] for m in memories]
 
 
 async def stream_message(user_id: str, thread_id: str, user_text: str, request: Request):
@@ -304,9 +350,12 @@ async def stream_message(user_id: str, thread_id: str, user_text: str, request: 
         version="v2",
     )
 
+    tool_started: dict[str, float] = {}
+
     try:
         async for event in astream:
             if await request.is_disconnected():
+                logger.info("client disconnected thread_id=%s", thread_id)
                 # actually close the underlying generator, not just stop yielding
                 await astream.aclose()
                 break
@@ -319,6 +368,8 @@ async def stream_message(user_id: str, thread_id: str, user_text: str, request: 
                     yield {"type": "token", "content": chunk.content}
 
             elif kind == "on_tool_start":
+                tool_started[event["run_id"]] = time.perf_counter()
+                logger.debug("tool started tool=%s thread_id=%s", event["name"], thread_id)
                 yield {
                     "type": "tool_start",
                     "tool": event["name"],
@@ -326,6 +377,13 @@ async def stream_message(user_id: str, thread_id: str, user_text: str, request: 
                 }
 
             elif kind == "on_tool_end":
+                started = tool_started.pop(event["run_id"], None)
+                logger.info(
+                    "tool finished tool=%s thread_id=%s duration_ms=%s",
+                    event["name"],
+                    thread_id,
+                    int((time.perf_counter() - started) * 1000) if started else "n/a",
+                )
                 yield {
                     "type": "tool_end",
                     "tool": event["name"],
@@ -333,5 +391,6 @@ async def stream_message(user_id: str, thread_id: str, user_text: str, request: 
                 }
 
     except asyncio.CancelledError:
+        logger.info("stream cancelled thread_id=%s", thread_id)
         await astream.aclose()
         raise

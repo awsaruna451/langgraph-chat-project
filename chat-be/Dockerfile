@@ -27,6 +27,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # App source only (see .dockerignore for exclusions: .env, notebooks, __pycache__, etc.)
 COPY --chown=appuser:appuser main.py ./
+COPY --chown=appuser:appuser core ./core
 COPY --chown=appuser:appuser application ./application
 COPY --chown=appuser:appuser schema ./schema
 COPY --chown=appuser:appuser service ./service

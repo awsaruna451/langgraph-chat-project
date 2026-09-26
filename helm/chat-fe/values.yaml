@@ -1,0 +1,32 @@
+fullnameOverride: chat-fe
+
+replicaCount: 1
+
+image:
+  repository: aruna451/chat-fe
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: NodePort
+  port: 5173
+  nodePort: 30173
+
+containerPort: 80
+
+# URL the frontend uses to reach the backend. If the frontend is a
+# browser-rendered SPA, this must be externally reachable (not the
+# in-cluster DNS name) — see chart NOTES.txt after install.
+apiBaseUrl: "http://chat-be:8001"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,21 @@
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: kibana
+  namespace: logging
+spec:
+  version: 9.4.2   # must match Elasticsearch's version exactly
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch
+  podTemplate:
+    spec:
+      containers:
+        - name: kibana
+          resources:
+            requests:
+              memory: 1.5Gi
+              cpu: 500m
+            limits:
+              memory: 1.5Gi
+              cpu: 1000m

@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mcp-server-monitoring
+  namespace: ai-agent-platform
+  labels:
+    # This label must match kube-prometheus-stack's serviceMonitorSelector
+    # (by default it's release: <helm release name of kube-prometheus-stack>)
+    release: kube-prom-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-server
+  namespaceSelector:
+    matchNames:
+      - ai-agent-platform
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

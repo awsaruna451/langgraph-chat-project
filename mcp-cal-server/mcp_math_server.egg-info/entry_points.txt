@@ -1,2 +1,0 @@
-[console_scripts]
-mcp-math-server = app.main:main

@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
 
+    # Identity: appears in every log line and on every trace
+    service_name: str = "mcp-cal-server"
+    service_version: str = "0.0.0"
+    environment: str = "dev"
+
     # CORS - comma-separated list of allowed origins. Never default to "*"
     # in a deployable config; require it to be set explicitly per environment.
     cors_allowed_origins: str = "http://localhost:5173"
