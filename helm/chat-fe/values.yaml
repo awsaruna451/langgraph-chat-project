@@ -1,24 +1,18 @@
 fullnameOverride: chat-fe
-
 replicaCount: 1
-
 image:
-  repository: aruna451/chat-fe
-  tag: latest
+  repository: 324037296112.dkr.ecr.us-east-1.amazonaws.com/chat-fe
+  tag: 32b6101537a2
   pullPolicy: Always
-
 service:
   type: NodePort
   port: 5173
   nodePort: 30173
-
 containerPort: 80
-
 # URL the frontend uses to reach the backend. If the frontend is a
 # browser-rendered SPA, this must be externally reachable (not the
 # in-cluster DNS name) — see chart NOTES.txt after install.
 apiBaseUrl: "http://chat-be:8001"
-
 resources:
   requests:
     cpu: 100m
@@ -26,11 +20,9 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 ingress:
   enabled: true
   className: alb
@@ -42,5 +34,5 @@ ingress:
   pathType: Prefix
   healthCheckPath: /
   targetGroup:
-    deregistrationDelaySeconds: 15   # static assets — pods can drop fast, no in-flight state to drain
+    deregistrationDelaySeconds: 15 # static assets — pods can drop fast, no in-flight state to drain
   annotations: {}
