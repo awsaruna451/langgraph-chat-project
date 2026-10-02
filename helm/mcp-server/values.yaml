@@ -1,22 +1,16 @@
 fullnameOverride: mcp-server
-
 replicaCount: 1
-
 image:
-  repository: aruna451/mcp-cal-server
-  tag: latest
+  repository: 324037296112.dkr.ecr.us-east-1.amazonaws.com/mcp-server
+  tag: 32b6101537a2
   pullPolicy: Always
-
 service:
   type: ClusterIP
   port: 8000
-
 containerPort: 8000
-
 healthCheck:
   path: /health
   port: 8000
-
 resources:
   requests:
     cpu: 100m
@@ -24,11 +18,9 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-
 # Name of an existing Secret containing API keys (created outside this chart,
 # or by the umbrella chart) — mounted via envFrom.
 existingSecret: ""
-
 env: []
 # Extra plain (non-secret) env vars, e.g.:
 # env:
@@ -38,7 +30,6 @@ env: []
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 mcp-server:
   image:
     repository: aruna451/mcp-cal-server
