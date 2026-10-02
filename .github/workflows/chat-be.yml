@@ -1,17 +1,18 @@
-name: chat-be - Build & Deployment
+name: chat-be - Build, Push & Update Helm values
 
 on:
   push:
     branches: [dev]
     paths:
       - "chat-be/**"
+      - "helm/chat-be/**"
       - ".github/workflows/chat-be.yml"
       - ".github/workflows/_build-push-ecr.yml"
   workflow_dispatch: {}
 
 permissions:
-  id-token: write   # required so the caller can grant this to the reusable workflow
-  contents: read
+  id-token: write
+  contents: write
 
 jobs:
   build-and-push:
@@ -20,11 +21,9 @@ jobs:
       service_name: "chat-be"
       context_path: "chat-be"
       dockerfile: "chat-be/Dockerfile"
-      ecr_repository: "ai-agent"
+      ecr_repository: "chat-be"
       aws_region: "us-east-1"
-      environment: "dev"
-      host_port: "8001"
-      container_port: "8000"  # ← confirm chat-be's actual internal listening port (uvicorn/fastapi default shown here)
-      secret_name: "ai-agent-platform-dev-secrets"
+      helm_values_path: "helm/chat-be/values.yaml"
+      gitops_branch: "dev.01"   # confirm: the branch ArgoCD's Application tracks for this chart
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

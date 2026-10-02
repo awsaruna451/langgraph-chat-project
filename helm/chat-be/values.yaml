@@ -22,7 +22,7 @@ healthCheck:
 mcpServerUrl: "http://mcp-server:8000"
 
 existingSecret: app-secrets
-createSecret: true
+createSecret: false
 
 secrets:
   openaiApiKey: ""
@@ -43,3 +43,49 @@ resources:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+ingress:
+  enabled: true
+  className: alb
+  group:
+    name: chat-platform
+    order: 10
+    isPrimary: true
+  host: null
+  path: /api
+  pathType: Prefix
+  healthCheckPath: /health
+  idleTimeoutSeconds: 180        # streaming/SSE responses from ai-agent need this raised from the 60s default
+  targetGroup:
+    deregistrationDelaySeconds: 30
+  accessLogs:
+    enabled: false                # flip once the S3 bucket + ELB write policy exist
+    bucket: ""
+    prefix: "chat-platform-dev"
+  waf:
+    enabled: false                # flip once a WAFv2 Web ACL is provisioned
+    aclArn: ""
+  tls:
+    enabled: false
+    certificateArn: ""
+  annotations: {}
+
+
+
+externalSecret:
+  name: app-secrets
+  enabled: true
+  secretStoreName: aws-secretsmanager
+  refs:
+    - secretKey: OPENAI_API_KEY
+      remoteKey: /tf-practice/dev/openai-api-key
+      property: openai_api_key
+    - secretKey: GOOGLE_API_KEY
+      remoteKey: /tf-practice/dev/google-api-key
+      property: google_api_key
+    - secretKey: OPENWEATHER_API_KEY
+      remoteKey: /tf-practice/dev/openweather-api-key
+      property: openweather_api_key
+    - secretKey: ALPHAVANTAGE_API_KEY
+      remoteKey: /tf-practice/dev/alpha-vantage-api-key
+      property: alpha_vantage_api_key

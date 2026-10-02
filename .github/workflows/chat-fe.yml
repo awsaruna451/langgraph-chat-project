@@ -1,16 +1,18 @@
-name: chat-fe - Build & Deployment
+name: chat-fe - Build, Push & Update Helm values
+
 on:
   push:
     branches: [dev]
     paths:
       - "chat-fe/**"
+      - "helm/chat-fe/**"
       - ".github/workflows/chat-fe.yml"
       - ".github/workflows/_build-push-ecr.yml"
   workflow_dispatch: {}
 
 permissions:
-  id-token: write   # required so the caller can grant this to the reusable workflow
-  contents: read
+  id-token: write
+  contents: write
 
 jobs:
   build-and-push:
@@ -19,10 +21,9 @@ jobs:
       service_name: "chat-fe"
       context_path: "chat-fe"
       dockerfile: "chat-fe/Dockerfile"
-      ecr_repository: "frontend"
+      ecr_repository: "chat-fe"
       aws_region: "us-east-1"
-      environment: "dev"
-      host_port: "5173"
-      container_port: "80"
+      helm_values_path: "helm/chat-fe/values.yaml"
+      gitops_branch: "dev.01"   # confirm: the branch ArgoCD's Application tracks for this chart
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

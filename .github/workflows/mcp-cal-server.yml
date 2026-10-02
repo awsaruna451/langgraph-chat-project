@@ -1,16 +1,18 @@
-name: mcp-cal-server - Build & Deployment
+name: mcp-cal-server - Build, Push & Update Helm values
+
 on:
   push:
     branches: [dev]
     paths:
       - "mcp-cal-server/**"
+      - "helm/mcp-server/**"
       - ".github/workflows/mcp-cal-server.yml"
       - ".github/workflows/_build-push-ecr.yml"
   workflow_dispatch: {}
 
 permissions:
-  id-token: write   # required so the caller can grant this to the reusable workflow
-  contents: read
+  id-token: write
+  contents: write
 
 jobs:
   build-and-push:
@@ -21,9 +23,7 @@ jobs:
       dockerfile: "mcp-cal-server/Dockerfile"
       ecr_repository: "mcp-server"
       aws_region: "us-east-1"
-      environment: "dev"
-      host_port: "8000"
-      container_port: "8000"  # ← confirm mcp-cal-server's actual internal listening port
-      secret_name: "ai-agent-platform-dev-secrets"
+      helm_values_path: "helm/mcp-server/values.yaml"
+      gitops_branch: "dev.01"   # confirm: the branch ArgoCD's Application tracks for this chart
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}

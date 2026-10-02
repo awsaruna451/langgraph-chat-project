@@ -30,3 +30,17 @@ resources:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+ingress:
+  enabled: true
+  className: alb
+  group:
+    name: chat-platform
+    order: 20
+  host: null
+  path: /
+  pathType: Prefix
+  healthCheckPath: /
+  targetGroup:
+    deregistrationDelaySeconds: 15   # static assets — pods can drop fast, no in-flight state to drain
+  annotations: {}

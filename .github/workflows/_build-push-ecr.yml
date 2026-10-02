@@ -1,10 +1,10 @@
-name: Reusable - Build & Push to ECR deployment
+name: Reusable - Build, Push to ECR & Update Helm values
 
 on:
   workflow_call:
     inputs:
       service_name:
-        description: "Human-readable service name (used in logs/tags)"
+        description: "Human-readable service name (used in logs/tags/commit messages)"
         required: true
         type: string
       context_path:
@@ -19,29 +19,29 @@ on:
         description: "Name of the ECR repository for this service"
         required: true
         type: string
-        default: "ai-agent-platform-prod"
       aws_region:
         description: "AWS region the ECR repository lives in"
         required: false
         type: string
         default: "us-east-1"
-      environment:
-        description: "Environment tag to target for deployment (e.g. prod)"
+      helm_values_path:
+        description: "Path (relative to repo root) to this service's Helm values.yaml"
         required: true
         type: string
-      host_port:
-        description: "Port on the EC2 host to publish (what the ALB target group forwards to)"
-        required: true
-        type: string
-      container_port:
-        description: "Port the process inside the container actually listens on (e.g. nginx = 80)"
-        required: true
-        type: string
-      secret_name:
-        description: "Secrets Manager secret name to inject as container env vars (optional — leave blank if the service needs none)"
+      image_repository_key:
+        description: "yq path to the image repository field in values.yaml"
         required: false
         type: string
-        default: ""
+        default: ".image.repository"
+      image_tag_key:
+        description: "yq path to the image tag field in values.yaml"
+        required: false
+        type: string
+        default: ".image.tag"
+      gitops_branch:
+        description: "Branch ArgoCD tracks; the Helm values bump is committed here"
+        required: true
+        type: string
     secrets:
       AWS_ROLE_ARN:
         description: "IAM role ARN GitHub Actions will assume via OIDC"
@@ -49,12 +49,15 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write   # write is required now: this workflow commits the values.yaml bump back to the repo
 
 jobs:
   build-and-push:
     name: Build & Push ${{ inputs.service_name }}
     runs-on: ubuntu-latest
+    outputs:
+      image_repository: ${{ steps.tags.outputs.image_repository }}
+      sha_tag: ${{ steps.tags.outputs.sha_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -85,8 +88,8 @@ jobs:
           REPO="${{ inputs.ecr_repository }}"
           SHA_TAG="${GITHUB_SHA::12}"
           echo "sha_tag=$SHA_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_repository=$REGISTRY/$REPO" >> "$GITHUB_OUTPUT"
           echo "image_sha=$REGISTRY/$REPO:$SHA_TAG" >> "$GITHUB_OUTPUT"
-          echo "image_latest=$REGISTRY/$REPO:latest" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -98,9 +101,7 @@ jobs:
           file: ${{ inputs.dockerfile }}
           push: true
           platforms: linux/amd64
-          tags: |
-            ${{ steps.tags.outputs.image_sha }}
-            ${{ steps.tags.outputs.image_latest }}
+          tags: ${{ steps.tags.outputs.image_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -108,81 +109,72 @@ jobs:
         run: |
           echo "### ${{ inputs.service_name }} pushed to ECR" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${{ steps.tags.outputs.image_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`${{ steps.tags.outputs.image_latest }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Deploy via SSM
+  update-helm-values:
+    name: Update Helm values for ${{ inputs.service_name }}
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Serializes commits to the GitOps branch across concurrent service workflows
+    # (chat-be / chat-fe / mcp-server can all fire at once on a monorepo push) so
+    # two jobs don't race to push and fail on a non-fast-forward error.
+    concurrency:
+      group: helm-values-${{ inputs.gitops_branch }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout GitOps branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.gitops_branch }}
+          fetch-depth: 0
+
+      - name: Install yq
         run: |
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --region "${{ inputs.aws_region }}" \
-            --filters "Name=tag:Environment,Values=${{ inputs.environment }}" \
-                      "Name=tag:ManagedBy,Values=terraform" \
-                      "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].InstanceId" --output text)
+          sudo curl -sL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
 
-          if [ -z "$INSTANCE_IDS" ]; then
-            echo "No running instances found to deploy to."
-            exit 1
+      - name: Bump image repository & tag in values.yaml
+        run: |
+          VALUES_FILE="${{ inputs.helm_values_path }}"
+          test -f "$VALUES_FILE"   # fail fast with a clear error if the path is wrong
+
+          yq -i '${{ inputs.image_repository_key }} = "${{ needs.build-and-push.outputs.image_repository }}"' "$VALUES_FILE"
+          yq -i '${{ inputs.image_tag_key }} = "${{ needs.build-and-push.outputs.sha_tag }}"' "$VALUES_FILE"
+
+          echo "### Updated $VALUES_FILE" >> "$GITHUB_STEP_SUMMARY"
+          echo '```yaml' >> "$GITHUB_STEP_SUMMARY"
+          cat "$VALUES_FILE" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit & push
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          VALUES_FILE="${{ inputs.helm_values_path }}"
+          git add "$VALUES_FILE"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit (tag already up to date)."
+            exit 0
           fi
 
-          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
-          IMAGE="${REGISTRY}/${{ inputs.ecr_repository }}:${{ steps.tags.outputs.sha_tag }}"
-          SECRET_NAME="${{ inputs.secret_name }}"
+          git commit -m "chore(${{ inputs.service_name }}): deploy ${{ needs.build-and-push.outputs.sha_tag }}"
 
-          cat > deploy.sh <<'SCRIPT_EOF'
-          #!/bin/bash
-          set -euxo pipefail
-          aws ecr get-login-password --region "__AWS_REGION__" | docker login --username AWS --password-stdin "__REGISTRY__"
-          docker pull "__IMAGE__"
-          docker stop __SERVICE_NAME__ || true
-          docker rm __SERVICE_NAME__ || true
-
-          # Shared user-defined network so containers can reach each other by
-          # name (e.g. http://mcp-cal-server:8000) — the default bridge
-          # network does not support container-name DNS resolution.
-          docker network create app-net 2>/dev/null || true
-
-          ENV_FLAGS=""
-          if [ -n "__SECRET_NAME__" ]; then
-            set +x
-            SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "__SECRET_NAME__" --region "__AWS_REGION__" --query SecretString --output text)
-            ENV_FLAGS=$(echo "$SECRET_JSON" | jq -r 'to_entries | map("-e " + .key + "=" + (.value|@sh)) | join(" ")')
-            unset SECRET_JSON
-            set -x
-          fi
-
-          eval docker run -d --name __SERVICE_NAME__ --network app-net --restart unless-stopped -p __HOST_PORT__:__CONTAINER_PORT__ $ENV_FLAGS "__IMAGE__"
-          SCRIPT_EOF
-
-          sed -i \
-            -e "s#__AWS_REGION__#${{ inputs.aws_region }}#g" \
-            -e "s#__REGISTRY__#${REGISTRY}#g" \
-            -e "s#__IMAGE__#${IMAGE}#g" \
-            -e "s#__SERVICE_NAME__#${{ inputs.service_name }}#g" \
-            -e "s#__HOST_PORT__#${{ inputs.host_port }}#g" \
-            -e "s#__CONTAINER_PORT__#${{ inputs.container_port }}#g" \
-            -e "s#__SECRET_NAME__#${SECRET_NAME}#g" \
-            deploy.sh
-
-          B64=$(base64 -w0 deploy.sh)
-
-          COMMAND_ID=$(aws ssm send-command \
-            --region "${{ inputs.aws_region }}" \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=InstanceIds,Values=$(echo $INSTANCE_IDS | tr ' ' ',')" \
-            --comment "Deploy ${{ inputs.service_name }}" \
-            --parameters commands="[\"echo ${B64} | base64 -d > /tmp/deploy.sh\", \"chmod +x /tmp/deploy.sh\", \"/tmp/deploy.sh\"]" \
-            --query "Command.CommandId" --output text)
-
-          echo "Waiting for command $COMMAND_ID to finish..."
-          aws ssm wait command-executed \
-            --region "${{ inputs.aws_region }}" \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$(echo $INSTANCE_IDS | cut -d' ' -f1)" || true
-
-          for id in $INSTANCE_IDS; do
-            echo "--- Output for $id ---"
-            aws ssm get-command-invocation \
-              --region "${{ inputs.aws_region }}" \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$id"
+          # Retry on push rejection: another service's job may have pushed to this
+          # branch between our checkout and now. Rebase onto the latest and retry.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:"${{ inputs.gitops_branch }}"; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), rebasing onto latest ${{ inputs.gitops_branch }}..."
+            git fetch origin "${{ inputs.gitops_branch }}"
+            git rebase "origin/${{ inputs.gitops_branch }}"
+            sleep $((attempt * 3))
           done
+
+          echo "::error::Failed to push Helm values update after 5 attempts."
+          exit 1
