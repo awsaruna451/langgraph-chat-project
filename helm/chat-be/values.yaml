@@ -1,37 +1,27 @@
 fullnameOverride: chat-be
-
 replicaCount: 1
-
 image:
-  repository: aruna451/chat-be
-  tag: latest
+  repository: 324037296112.dkr.ecr.us-east-1.amazonaws.com/chat-be
+  tag: 32b6101537a2
   pullPolicy: Always
-
 service:
   type: ClusterIP
   port: 8001
-
 containerPort: 8000
-
 healthCheck:
   path: /health
   port: 8000
-
 # In-cluster URL of the MCP server. Defaults to the mcp-server chart's
 # service name when installed together via the umbrella chart.
 mcpServerUrl: "http://mcp-server:8000"
-
 existingSecret: app-secrets
 createSecret: false
-
 secrets:
   openaiApiKey: ""
   googleApiKey: ""
   openweatherApiKey: ""
   alphavantageApiKey: ""
-
 env: []
-
 resources:
   requests:
     cpu: 200m
@@ -39,11 +29,9 @@ resources:
   limits:
     cpu: 1000m
     memory: 512Mi
-
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 ingress:
   enabled: true
   className: alb
@@ -55,23 +43,20 @@ ingress:
   path: /api
   pathType: Prefix
   healthCheckPath: /health
-  idleTimeoutSeconds: 180        # streaming/SSE responses from ai-agent need this raised from the 60s default
+  idleTimeoutSeconds: 180 # streaming/SSE responses from ai-agent need this raised from the 60s default
   targetGroup:
     deregistrationDelaySeconds: 30
   accessLogs:
-    enabled: false                # flip once the S3 bucket + ELB write policy exist
+    enabled: false # flip once the S3 bucket + ELB write policy exist
     bucket: ""
     prefix: "chat-platform-dev"
   waf:
-    enabled: false                # flip once a WAFv2 Web ACL is provisioned
+    enabled: false # flip once a WAFv2 Web ACL is provisioned
     aclArn: ""
   tls:
     enabled: false
     certificateArn: ""
   annotations: {}
-
-
-
 externalSecret:
   name: app-secrets
   enabled: true
