@@ -26,4 +26,4 @@ jobs:
       helm_values_path: "helm/chat-fe/values.yaml"
       gitops_branch: "dev.01"   # confirm: the branch ArgoCD's Application tracks for this chart
     secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_EKS_ARN }}
+      AWS_ROLE_EKS_ARN: ${{ secrets.AWS_ROLE_EKS_ARN }}
