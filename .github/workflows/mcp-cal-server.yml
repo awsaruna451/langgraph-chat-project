@@ -2,7 +2,7 @@ name: mcp-cal-server - Build, Push & Update Helm values
 
 on:
   push:
-    branches: [dev]
+    branches: [dev.01]
     paths:
       - "mcp-cal-server/**"
       - "helm/mcp-server/**"
@@ -26,4 +26,4 @@ jobs:
       helm_values_path: "helm/mcp-server/values.yaml"
       gitops_branch: "dev.01"   # confirm: the branch ArgoCD's Application tracks for this chart
     secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_EKS_ARN }}

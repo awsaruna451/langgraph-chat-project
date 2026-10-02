@@ -43,7 +43,7 @@ on:
         required: true
         type: string
     secrets:
-      AWS_ROLE_ARN:
+      AWS_ROLE_EKS_ARN:
         description: "IAM role ARN GitHub Actions will assume via OIDC"
         required: true
 
@@ -65,7 +65,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_EKS_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Login to Amazon ECR
