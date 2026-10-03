@@ -50,7 +50,6 @@ on:
 permissions:
   id-token: write
   contents: write
-
 jobs:
   build-and-push:
     name: Build & Push ${{ inputs.service_name }}

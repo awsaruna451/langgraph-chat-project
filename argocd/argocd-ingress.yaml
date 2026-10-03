@@ -11,7 +11,7 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-path: /healthz
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
-    alb.ingress.kubernetes.io/inbound-cidrs: 175.157.138.181/32
+    alb.ingress.kubernetes.io/inbound-cidrs: 111.223.177.173/32
 spec:
   ingressClassName: alb
   rules:
