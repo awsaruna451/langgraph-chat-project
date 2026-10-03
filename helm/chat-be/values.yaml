@@ -2,7 +2,7 @@ fullnameOverride: chat-be
 replicaCount: 1
 image:
   repository: 324037296112.dkr.ecr.us-east-1.amazonaws.com/chat-be
-  tag: 32b6101537a2
+  tag: aa975c2d0eba
   pullPolicy: Always
 service:
   type: ClusterIP
