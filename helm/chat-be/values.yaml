@@ -2,7 +2,7 @@ fullnameOverride: chat-be
 replicaCount: 1
 image:
   repository: 324037296112.dkr.ecr.us-east-1.amazonaws.com/chat-be
-  tag: aa975c2d0eba
+  tag: 9ecf0b5fc2f5
   pullPolicy: Always
 service:
   type: ClusterIP
@@ -30,10 +30,8 @@ resources:
     cpu: 1000m
     memory: 512Mi
 nodeSelector: {}
-
 tolerations: []
 affinity: {}
-
 ingress:
   enabled: true
   className: alb
@@ -76,10 +74,8 @@ externalSecret:
     - secretKey: ALPHAVANTAGE_API_KEY
       remoteKey: /tf-practice/dev/alpha-vantage-api-key
       property: alpha_vantage_api_key
-
-
 serviceMonitor:
-  enabled: false          # turn on after kube-prometheus-stack is installed
+  enabled: false # turn on after kube-prometheus-stack is installed
   release: kube-prom-stack
   portName: http
   path: /metrics
