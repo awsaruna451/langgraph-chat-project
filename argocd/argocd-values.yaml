@@ -1,0 +1,32 @@
+global:
+  domain: argocd.example.com    # only matters once you enable the ingress
+
+configs:
+  params:
+    server.insecure: true       # plain HTTP behind the ALB (or port-forward)
+  cm:
+    exec.enabled: false
+  rbac:
+    policy.default: role:readonly
+
+controller:
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { memory: 1Gi }
+
+server:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+  ingress:
+    enabled: false              # turn on later (section 9)
+
+repoServer:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { memory: 512Mi }
+
+applicationSet:
+  replicas: 1

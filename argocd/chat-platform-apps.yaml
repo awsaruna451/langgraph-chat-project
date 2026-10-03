@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: chat-platform
+  namespace: argocd
+spec:
+  description: chat-platform services
+  sourceRepos:
+    - https://github.com/awsaruna451/langgraph-chat-project.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: chat-platform
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: chat-platform
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: mcp-server
+          - name: chat-be
+          - name: chat-fe
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: chat-platform
+      source:
+        repoURL: https://github.com/awsaruna451/langgraph-chat-project.git
+        targetRevision: dev.01
+        path: 'helm/{{name}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: chat-platform
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
