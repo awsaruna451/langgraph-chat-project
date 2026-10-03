@@ -49,7 +49,7 @@ on:
 
 permissions:
   id-token: write
-  contents: write   # write is required now: this workflow commits the values.yaml bump back to the repo
+  contents: write
 
 jobs:
   build-and-push:
