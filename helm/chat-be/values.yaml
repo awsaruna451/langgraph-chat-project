@@ -74,3 +74,11 @@ externalSecret:
     - secretKey: ALPHAVANTAGE_API_KEY
       remoteKey: /tf-practice/dev/alpha-vantage-api-key
       property: alpha_vantage_api_key
+
+
+serviceMonitor:
+  enabled: false          # turn on after kube-prometheus-stack is installed
+  release: kube-prom-stack
+  portName: http
+  path: /metrics
+  interval: 15s
