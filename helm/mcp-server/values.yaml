@@ -36,3 +36,8 @@ mcp-server:
     tag: latest
   labels: mcp-cal-server
   fullname: mcp-cal-server
+
+serviceMonitor:
+  enabled: false
+  release: kube-prom-stack
+  interval: 15s
