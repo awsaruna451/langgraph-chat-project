@@ -30,8 +30,10 @@ resources:
     cpu: 1000m
     memory: 512Mi
 nodeSelector: {}
+
 tolerations: []
 affinity: {}
+
 ingress:
   enabled: true
   className: alb
