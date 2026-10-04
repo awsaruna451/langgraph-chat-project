@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana
+  namespace: logging   # confirm this matches the namespace kibana-kb-http is actually in
+  annotations:
+    alb.ingress.kubernetes.io/group.name: kibana
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # ECK serves Kibana over HTTPS by default (self-signed cert), even on the
+    # port named "http" -- the ALB must speak HTTPS to the pod or the
+    # healthcheck (and every request) will fail with a protocol mismatch.
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTPS
+    alb.ingress.kubernetes.io/healthcheck-path: /login
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:324037296112:certificate/081e89a6-b420-4832-906a-579a20e4ab4f
+    # Lock this down the same way as ArgoCD -- Kibana gives read access to all
+    # your logs, don't leave it open to the internet. Replace with your own IP(s).
+    alb.ingress.kubernetes.io/inbound-cidrs: 111.223.177.173/32
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kibana-kb-http
+                port:
+                  number: 5601
